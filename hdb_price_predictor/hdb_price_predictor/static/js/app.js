@@ -25,24 +25,49 @@ function setupModeCards() {
         modeInput.value = mode;
         priceModeCard.classList.toggle('active', mode === 'price');
         townModeCard.classList.toggle('active', mode === 'town');
+        toggleFieldSections(mode);
     };
 
     priceModeCard.addEventListener('click', () => setMode('price'));
     townModeCard.addEventListener('click', () => setMode('town'));
+    setMode('price');
 }
 
 function setupFormHandlers() {
     document.getElementById('pricePredictBtn').addEventListener('click', async () => {
+        switchMode('price');
         await handlePricePrediction();
     });
 
     document.getElementById('townRecommendBtn').addEventListener('click', async () => {
+        switchMode('town');
         await handleTownPrediction();
     });
 
     document.getElementById('predictionForm').addEventListener('reset', () => {
         setTimeout(clearResults, 0);
     });
+}
+
+function switchMode(mode) {
+    currentMode = mode;
+    const modeInput = document.getElementById('prediction_mode');
+    const priceModeCard = document.getElementById('priceModeCard');
+    const townModeCard = document.getElementById('townModeCard');
+    modeInput.value = mode;
+    priceModeCard.classList.toggle('active', mode === 'price');
+    townModeCard.classList.toggle('active', mode === 'town');
+    toggleFieldSections(mode);
+}
+
+function toggleFieldSections(mode) {
+    const priceSections = document.getElementById('priceFieldSections');
+    const townSections = document.getElementById('townFieldSections');
+
+    if (priceSections && townSections) {
+        priceSections.classList.toggle('hidden', mode !== 'price');
+        townSections.classList.toggle('hidden', mode !== 'town');
+    }
 }
 
 function getFormData() {
@@ -67,11 +92,12 @@ function collectPriceData(formData) {
 }
 
 function collectTownData(formData, predictedPrice) {
-    const amenityFlags = collectAmenityFlags(formData);
+    const amenityFlags = collectTownPriorityFlags(formData);
     const cbdDist = parseFloat(formData.get('cbd_distance')) || 5;
     const cbdBand = cbdDist <= 5 ? 1 : cbdDist <= 10 ? 2 : cbdDist <= 15 ? 3 : 4;
     const maxFloor = parseInt(formData.get('max_floor_lvl')) || 18;
     const midStorey = parseInt(formData.get('mid_storey')) || 9;
+    const budgetHint = parseFloat(formData.get('town_budget_hint')) || 0;
 
     const mrtDist = amenityFlags.mrt_near ? 400 : 1500;
     const hawkerDist = amenityFlags.hawker_near ? 300 : 1000;
@@ -84,7 +110,7 @@ function collectTownData(formData, predictedPrice) {
     const amenity2km = (mrtDist < 2000 ? 1 : 0) + (mallDist < 2000 ? 1 : 0) + (hawkerDist < 2000 ? 1 : 0) + (primarySchoolDist < 2000 ? 1 : 0) + (secondarySchoolDist < 2000 ? 1 : 0);
 
     return {
-        resale_price: predictedPrice || 500000,
+        resale_price: budgetHint || predictedPrice || 500000,
         floor_area_sqm: parseFloat(formData.get('floor_area_sqm')) || 100,
         block_diversity: 1.5,
         cbd_distance_band: cbdBand,
@@ -107,6 +133,16 @@ function collectAmenityFlags(formData) {
         mall_near: Boolean(formData.get('mall_near')),
         primary_school_near: Boolean(formData.get('primary_school_near')),
         secondary_school_near: Boolean(formData.get('secondary_school_near'))
+    };
+}
+
+function collectTownPriorityFlags(formData) {
+    return {
+        mrt_near: Boolean(formData.get('town_priority_mrt')),
+        hawker_near: Boolean(formData.get('town_priority_hawker')),
+        mall_near: Boolean(formData.get('town_priority_mall')),
+        primary_school_near: Boolean(formData.get('town_priority_primary_school')),
+        secondary_school_near: Boolean(formData.get('town_priority_secondary_school'))
     };
 }
 

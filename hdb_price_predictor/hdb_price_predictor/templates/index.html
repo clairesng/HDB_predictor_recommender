@@ -496,6 +496,7 @@
 
                 <p class="section-note">Leave any field blank if you do not know it — the app will fill sensible defaults and show a range where appropriate.</p>
 
+                <div id="priceFieldSections">
                 <!-- ========== FLAT CHARACTERISTICS ========== -->
                 <div class="form-section">
                     <div class="section-title">🏘️ Flat Characteristics <span class="optional-badge">Mostly optional</span></div>
@@ -613,6 +614,48 @@
                             <label for="secondary_school_near" style="margin: 0;">Near Secondary School</label>
                         </div>
                     </div>
+                </div>
+                </div>
+
+                <div id="townFieldSections" class="hidden">
+                <!-- ========== TOWN PRIORITIES ========== -->
+                <div class="form-section">
+                    <div class="section-title">📍 Town Priorities <span class="optional-badge">For town recommender</span></div>
+                    <p class="section-note">Tick the things you care about most. These preferences help the town recommender rank the best matches.</p>
+                    <div class="checkbox-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="town_priority_mrt" name="town_priority_mrt" checked>
+                            <label for="town_priority_mrt" style="margin: 0;">Easy access to MRT</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="town_priority_hawker" name="town_priority_hawker" checked>
+                            <label for="town_priority_hawker" style="margin: 0;">Near hawker centres</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="town_priority_mall" name="town_priority_mall">
+                            <label for="town_priority_mall" style="margin: 0;">Near shopping malls</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="town_priority_primary_school" name="town_priority_primary_school">
+                            <label for="town_priority_primary_school" style="margin: 0;">Near primary schools</label>
+                        </div>
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="town_priority_secondary_school" name="town_priority_secondary_school">
+                            <label for="town_priority_secondary_school" style="margin: 0;">Near secondary schools</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title">💬 Optional Budget Hint <span class="optional-badge">Optional</span></div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="town_budget_hint">Approximate budget <span class="unit">(optional)</span></label>
+                            <input type="number" id="town_budget_hint" name="town_budget_hint" placeholder="e.g., 500000" min="100000" max="2000000" step="10000">
+                            <span class="info-text">Helps the recommender interpret your preferred price range</span>
+                        </div>
+                    </div>
+                </div>
                 </div>
 
                 <!-- ========== BUTTONS ========== -->
