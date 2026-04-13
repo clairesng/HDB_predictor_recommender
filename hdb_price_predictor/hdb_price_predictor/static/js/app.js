@@ -103,11 +103,12 @@ function collectPriceData(formData) {
 
 function collectTownData(formData, predictedPrice) {
     const amenityFlags = collectTownPriorityFlags(formData);
-    const cbdDist = parseFloat(formData.get('cbd_distance')) || 5;
+    const cbdDist = parseFloat(formData.get('town_cbd_distance')) || parseFloat(formData.get('cbd_distance')) || 5;
     const cbdBand = cbdDist <= 5 ? 1 : cbdDist <= 10 ? 2 : cbdDist <= 15 ? 3 : 4;
     const maxFloor = parseInt(formData.get('max_floor_lvl')) || 18;
     const midStorey = Math.max(1, Math.round(maxFloor / 2));
     const budgetHint = parseFloat(formData.get('town_budget_hint')) || 0;
+    const preferredRegion = formData.get('preferred_region') || '';
 
     const mrtDist = amenityFlags.mrt_near ? 400 : 1500;
     const hawkerDist = amenityFlags.hawker_near ? 300 : 1000;
@@ -132,7 +133,8 @@ function collectTownData(formData, predictedPrice) {
         estate_height_modernity: maxFloor / 11,
         amenity_cluster_500m: amenity500m,
         amenity_cluster_1km: amenity1km,
-        amenity_cluster_2km: amenity2km
+        amenity_cluster_2km: amenity2km,
+        preferred_region: preferredRegion
     };
 }
 

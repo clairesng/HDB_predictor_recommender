@@ -605,7 +605,7 @@
                 <div id="townFieldSections" class="hidden">
                 <!-- ========== TOWN PRIORITIES ========== -->
                 <div class="form-section">
-                    <div class="section-title">📍 Town Priorities <span class="optional-badge">For town recommender</span></div>
+                    <div class="section-title">📍 Town Priorities</div>
                     <p class="section-note">Tick the things you care about most. These preferences help the town recommender rank the best matches.</p>
                     <div class="checkbox-group">
                         <div class="checkbox-wrapper">
@@ -632,12 +632,27 @@
                 </div>
 
                 <div class="form-section">
-                    <div class="section-title">💬 Optional Budget Hint <span class="optional-badge">Optional</span></div>
+                    <div class="section-title">💬 My Budget</div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="town_budget_hint">Approximate budget <span class="unit">(optional)</span></label>
+                            <label for="town_budget_hint">Approximate budget</label>
                             <input type="number" id="town_budget_hint" name="town_budget_hint" placeholder="e.g., 500000" min="100000" max="2000000" step="10000">
                             <span class="info-text">Helps the recommender interpret your preferred price range</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="town_cbd_distance">Distance from CBD <span class="unit">(km)</span></label>
+                            <input type="number" id="town_cbd_distance" name="town_cbd_distance" placeholder="e.g., 8" min="0" max="40" step="0.5" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label for="preferred_region">Preferred Region <span class="unit">(optional)</span></label>
+                            <select id="preferred_region" name="preferred_region">
+                                <option value="">No preference</option>
+                                <option value="CENTRAL/SOUTH">Central/South</option>
+                                <option value="EAST">East</option>
+                                <option value="WEST">West</option>
+                                <option value="NORTH-EAST">North-East</option>
+                                <option value="NORTH">North</option>
+                            </select>
                         </div>
                     </div>
                 </div>

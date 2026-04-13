@@ -42,6 +42,16 @@ PRICE_FILE_CANDIDATES = {
     "medians": ["price_feature_medians.json", "feature_medians.json"],
     "labels": ["price_label_classes.json", "label_classes.json"],
 }
+PREFERRED_REGION_TOWNS = {
+    "CENTRAL/SOUTH": [
+        "Ang Mo Kio", "Bishan", "Bukit Merah", "Bukit Timah", "Central Area",
+        "Geylang", "Kallang/Whampoa", "Marine Parade", "Queenstown", "Toa Payoh"
+    ],
+    "NORTH-EAST": ["Hougang", "Punggol", "Sengkang", "Serangoon"],
+    "NORTH": ["Sembawang", "Woodlands", "Yishun"],
+    "EAST": ["Bedok", "Pasir Ris", "Tampines"],
+    "WEST": ["Bukit Batok", "Bukit Panjang", "Choa Chu Kang", "Clementi", "Jurong East", "Jurong West"],
+}
 
 
 def load_json_from_candidates(candidates, default_value):
@@ -240,9 +250,33 @@ def get_towns_in_cluster(cluster_id):
     return [town for town, cid in TOWN_CLUSTER_MAP.items() if cid == cluster_id]
 
 
-def rank_towns_by_similarity(user_features, predicted_cluster):
+def normalize_town_name(value):
+    return " ".join(str(value).strip().upper().split())
+
+
+def get_region_towns(preferred_region):
+    normalized_region = str(preferred_region or "").strip().upper()
+    configured_towns = PREFERRED_REGION_TOWNS.get(normalized_region, [])
+    if not configured_towns:
+        return set()
+    normalized_lookup = {normalize_town_name(town): town for town in TOWN_CLUSTER_MAP.keys()}
+    region_towns = set()
+    for town in configured_towns:
+        normalized = normalize_town_name(town)
+        if normalized in normalized_lookup:
+            region_towns.add(normalized_lookup[normalized])
+    return region_towns
+
+
+def rank_towns_by_similarity(user_features, predicted_cluster, preferred_region=None):
     """Rank towns in predicted cluster by profile similarity."""
     towns = get_towns_in_cluster(predicted_cluster)
+
+    if preferred_region:
+        region_towns = get_region_towns(preferred_region)
+        if region_towns:
+            filtered_cluster_towns = [town for town in towns if town in region_towns]
+            towns = filtered_cluster_towns if filtered_cluster_towns else [town for town in region_towns if town in TOWN_PROFILES]
     
     if not towns:
         return []
@@ -343,8 +377,11 @@ def predict_town():
             return jsonify({'error': 'No JSON data provided'}), 400
         
         # Convert string values to float where needed
+        preferred_region = data.get('preferred_region', '')
         processed_data = {}
         for key, value in data.items():
+            if key == 'preferred_region':
+                continue
             try:
                 processed_data[key] = float(value) if value is not None else 0
             except (ValueError, TypeError):
@@ -361,7 +398,7 @@ def predict_town():
         cluster_name = CLUSTER_LABELS.get(str(predicted_cluster), "Unknown Cluster")
         
         # Get towns in cluster, ranked by similarity
-        similar_towns = rank_towns_by_similarity(processed_data, predicted_cluster)
+        similar_towns = rank_towns_by_similarity(processed_data, predicted_cluster, preferred_region=preferred_region)
         
         return jsonify({
             'success': True,
@@ -369,7 +406,8 @@ def predict_town():
             'cluster_name': cluster_name,
             'recommended_towns': similar_towns,
             'first_recommendation': similar_towns[0] if len(similar_towns) > 0 else None,
-            'second_recommendation': similar_towns[1] if len(similar_towns) > 1 else None
+            'second_recommendation': similar_towns[1] if len(similar_towns) > 1 else None,
+            'preferred_region': preferred_region
         })
     
     except Exception as e:
