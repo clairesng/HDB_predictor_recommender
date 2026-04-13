@@ -33,6 +33,24 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 
 # ==================== MODEL LOADING ====================
 MODEL_DIR = Path(__file__).parent / "models"
+PRICE_FEATURE_ALIASES = {
+    "Tranc_Year": "tranc_year",
+    "tranc_year": "tranc_year",
+}
+PRICE_FILE_CANDIDATES = {
+    "features": ["price_feature_columns.json", "feature_columns.json"],
+    "medians": ["price_feature_medians.json", "feature_medians.json"],
+    "labels": ["price_label_classes.json", "label_classes.json"],
+}
+
+
+def load_json_from_candidates(candidates, default_value):
+    for filename in candidates:
+        file_path = MODEL_DIR / filename
+        if file_path.exists():
+            with open(file_path, "r") as file_handle:
+                return json.load(file_handle)
+    return default_value
 
 # ========== REGRESSION MODEL (Price Predictor) ==========
 try:
@@ -45,29 +63,24 @@ except Exception as e:
     logger.exception(f"Failed to load price model: {e}")
     price_model = None
 
-try:
-    with open(MODEL_DIR / "price_feature_columns.json", "r") as f:
-        PRICE_FEATURES = json.load(f)
+PRICE_FEATURES = load_json_from_candidates(PRICE_FILE_CANDIDATES["features"], [])
+PRICE_FEATURES = [PRICE_FEATURE_ALIASES.get(feature, feature) for feature in PRICE_FEATURES]
+if PRICE_FEATURES:
     logger.info(f"✓ Price features loaded: {len(PRICE_FEATURES)} features")
-except FileNotFoundError:
-    logger.error("price_feature_columns.json not found")
-    PRICE_FEATURES = []
+else:
+    logger.error("No price feature columns file found")
 
-try:
-    with open(MODEL_DIR / "price_feature_medians.json", "r") as f:
-        price_medians = json.load(f)
+price_medians = load_json_from_candidates(PRICE_FILE_CANDIDATES["medians"], {})
+if price_medians:
     logger.info("✓ Price feature medians loaded")
-except FileNotFoundError:
-    logger.error("price_feature_medians.json not found")
-    price_medians = {}
+else:
+    logger.error("No price feature medians file found")
 
-try:
-    with open(MODEL_DIR / "price_label_classes.json", "r") as f:
-        price_label_classes = json.load(f)
-    logger.info(f"✓ Price label classes loaded for categorical encoding")
-except FileNotFoundError:
-    logger.error("price_label_classes.json not found")
-    price_label_classes = {}
+price_label_classes = load_json_from_candidates(PRICE_FILE_CANDIDATES["labels"], {})
+if price_label_classes:
+    logger.info("✓ Price label classes loaded for categorical encoding")
+else:
+    logger.error("No price label classes file found")
 
 # ========== CLASSIFICATION MODEL (Town Recommender) ==========
 try:
@@ -132,9 +145,11 @@ def encode_categorical_features(data_dict, label_encoders):
     for col, le in label_encoders.items():
         if col in encoded:
             try:
-                value_str = str(encoded[col]).upper()
-                if value_str in le.classes_:
-                    encoded[col] = int(le.transform([value_str])[0])
+                value_str = str(encoded[col]).strip()
+                normalized_value = value_str.upper().replace("-", " ")
+                class_lookup = {str(class_name).strip().upper().replace("-", " "): class_name for class_name in le.classes_}
+                if normalized_value in class_lookup:
+                    encoded[col] = int(le.transform([class_lookup[normalized_value]])[0])
                 else:
                     logger.warning(f"Value '{value_str}' not in {col}. Using median.")
                     encoded[col] = int(np.median(range(len(le.classes_))))
@@ -154,14 +169,53 @@ def prepare_price_input(user_input, label_encoders, feature_medians, all_feature
     
     # Update with user inputs
     feature_vector.update(user_input)
+
+    # Normalize feature aliases to the training column names expected by the model.
+    for alias, canonical in PRICE_FEATURE_ALIASES.items():
+        if alias in feature_vector and canonical not in feature_vector:
+            feature_vector[canonical] = feature_vector[alias]
     
     # Encode categorical features
     feature_vector = encode_categorical_features(feature_vector, label_encoders)
     
+    if not all_features:
+        raise ValueError("Price feature list is empty; check model artifacts in models/ directory")
+
     # Convert to array in correct feature order
     X = np.array([feature_vector[col] for col in all_features]).reshape(1, -1)
     
     return X
+
+
+def compute_liveability_index(user_input):
+    """Compute a liveability score from amenity proximity flags."""
+    factor_weights = {
+        "mrt_near": 0.25,
+        "hawker_near": 0.20,
+        "mall_near": 0.20,
+        "primary_school_near": 0.18,
+        "secondary_school_near": 0.17,
+    }
+
+    selected_weight = 0.0
+    for factor_name, weight in factor_weights.items():
+        if bool(user_input.get(factor_name)):
+            selected_weight += weight
+
+    if selected_weight == 0:
+        return 0.5
+
+    normalized_score = selected_weight / sum(factor_weights.values())
+    liveability_index = 0.35 + (normalized_score * 0.65)
+    return round(min(max(liveability_index, 0.0), 1.0), 3)
+
+
+def calculate_price_range(predicted_price, missing_field_count):
+    """Return a simple uncertainty band that grows when the user leaves fields blank."""
+    uncertainty_ratio = min(0.08 + (missing_field_count * 0.04), 0.25)
+    lower_price = max(predicted_price * (1 - uncertainty_ratio), 0)
+    upper_price = predicted_price * (1 + uncertainty_ratio)
+    return round(lower_price, 2), round(upper_price, 2)
 
 
 def prepare_classifier_input(user_input, classifier_features):
@@ -211,7 +265,7 @@ def rank_towns_by_similarity(user_features, predicted_cluster):
     # Sort by distance (ascending = most similar first)
     similarities.sort(key=lambda x: x[1])
     
-    return [town for town, _ in similarities[:5]]  # Return top 5 most similar
+    return [town for town, _ in similarities[:2]]  # Return top 2 most similar
 
 
 # ==================== ROUTES ====================
@@ -236,24 +290,40 @@ def predict_price():
             return jsonify({'error': 'No JSON data provided'}), 400
         
         # Process data
+        provided_fields = set(data.keys())
         processed_data = {}
         for key, value in data.items():
             if isinstance(value, str):
                 processed_data[key] = value.strip().upper()
             else:
                 processed_data[key] = float(value) if value is not None else 0
+
+        # Derive liveability from amenity checkboxes instead of asking the user directly.
+        processed_data["liveability_index"] = compute_liveability_index(data)
         
         # Prepare input
         X = prepare_price_input(processed_data, price_label_classes, price_medians, PRICE_FEATURES)
+
+        provided_fields = set(data.keys())
+        provided_fields.add("liveability_index")
         
         # Predict
         predicted_price = float(price_model.predict(X)[0])
         predicted_price = max(predicted_price, 0)
+        missing_fields = sorted(list(set(PRICE_FEATURES) - provided_fields))
+        price_lower, price_upper = calculate_price_range(predicted_price, len(missing_fields))
         
         return jsonify({
             'success': True,
             'predicted_price': round(predicted_price, 2),
-            'formatted_price': f"${predicted_price:,.0f}"
+            'formatted_price': f"${predicted_price:,.0f}",
+            'price_range': {
+                'lower': price_lower,
+                'upper': price_upper,
+                'formatted_lower': f"${price_lower:,.0f}",
+                'formatted_upper': f"${price_upper:,.0f}"
+            },
+            'missing_fields': missing_fields
         })
     
     except Exception as e:
@@ -297,7 +367,9 @@ def predict_town():
             'success': True,
             'predicted_cluster': predicted_cluster,
             'cluster_name': cluster_name,
-            'recommended_towns': similar_towns
+            'recommended_towns': similar_towns,
+            'first_recommendation': similar_towns[0] if len(similar_towns) > 0 else None,
+            'second_recommendation': similar_towns[1] if len(similar_towns) > 1 else None
         })
     
     except Exception as e:

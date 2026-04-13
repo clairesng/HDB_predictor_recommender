@@ -1,158 +1,161 @@
 /**
  * HDB Predictor App - Client-side JavaScript
- * Handles form submission and API calls for both price and town predictions
+ * Handles separate price and town prediction flows
  */
+
+let currentMode = 'price';
 
 document.addEventListener('DOMContentLoaded', function () {
     fetchCategoricalOptions();
+    setupModeCards();
     setupFormHandlers();
 });
 
-// ==================== FETCH CATEGORICAL OPTIONS ====================
 async function fetchCategoricalOptions() {
-    try {
-        // Note: Options are passed from Flask template
-        // If needed, you can fetch dynamically from /api/feature-options
-        console.log('✓ Categorical options loaded from template');
-    } catch (error) {
-        console.error('Error loading categorical options:', error);
-    }
+    console.log('✓ Categorical options loaded from template');
 }
 
-// ==================== FORM HANDLERS ====================
+function setupModeCards() {
+    const priceModeCard = document.getElementById('priceModeCard');
+    const townModeCard = document.getElementById('townModeCard');
+    const modeInput = document.getElementById('prediction_mode');
+
+    const setMode = (mode) => {
+        currentMode = mode;
+        modeInput.value = mode;
+        priceModeCard.classList.toggle('active', mode === 'price');
+        townModeCard.classList.toggle('active', mode === 'town');
+    };
+
+    priceModeCard.addEventListener('click', () => setMode('price'));
+    townModeCard.addEventListener('click', () => setMode('town'));
+}
+
 function setupFormHandlers() {
-    const form = document.getElementById('predictionForm');
-    if (form) {
-        form.addEventListener('submit', async function (e) {
-            e.preventDefault();
-            await handlePrediction();
-        });
-    }
+    document.getElementById('pricePredictBtn').addEventListener('click', async () => {
+        await handlePricePrediction();
+    });
+
+    document.getElementById('townRecommendBtn').addEventListener('click', async () => {
+        await handleTownPrediction();
+    });
+
+    document.getElementById('predictionForm').addEventListener('reset', () => {
+        setTimeout(clearResults, 0);
+    });
 }
 
-// ==================== MAIN PREDICTION HANDLER ====================
-async function handlePrediction() {
-    const resultContainer = document.getElementById('resultContainer');
-    const errorContainer = document.getElementById('errorContainer');
-    const btnText = document.getElementById('btn-text');
-    const btnSpinner = document.getElementById('btn-spinner');
-    const submitBtn = document.querySelector('.btn-predict');
-
-    try {
-        // Hide previous results
-        resultContainer.classList.add('hidden');
-        errorContainer.classList.add('hidden');
-
-        // Show loading state
-        submitBtn.disabled = true;
-        btnText.style.display = 'none';
-        btnSpinner.classList.remove('hidden');
-
-        // Collect form data
-        const formData = new FormData(document.getElementById('predictionForm'));
-        const priceData = collectPriceData(formData);
-        const townData = collectTownData(formData);
-
-        // Make parallel predictions
-        const [priceResult, townResult] = await Promise.all([
-            predictPrice(priceData),
-            predictTown(townData)
-        ]);
-
-        // Display results
-        displayResults(priceResult, townResult);
-
-    } catch (error) {
-        console.error('Prediction error:', error);
-        showError(error.message || 'An error occurred during prediction');
-    } finally {
-        // Reset button state
-        submitBtn.disabled = false;
-        btnText.style.display = 'inline';
-        btnSpinner.classList.add('hidden');
-    }
+function getFormData() {
+    return new FormData(document.getElementById('predictionForm'));
 }
-
-// ==================== DATA COLLECTION ====================
 
 function collectPriceData(formData) {
-    /**
-     * Collect price prediction features from form
-     * Maps to: floor_area_sqm, tranc_year, max_floor_lvl, mid_storey,
-     *          remaining_lease, cbd_distance, is_dbss, mature_estate,
-     *          liveability_index, flat_type, flat_model
-     */
+    const amenityFlags = collectAmenityFlags(formData);
+
     return {
         floor_area_sqm: parseFloat(formData.get('floor_area_sqm')) || 100,
-        tranc_year: parseInt(formData.get('tranc_year')) || 2023,
         max_floor_lvl: parseInt(formData.get('max_floor_lvl')) || 18,
         mid_storey: parseInt(formData.get('mid_storey')) || 9,
         remaining_lease: parseFloat(formData.get('remaining_lease')) || 75,
         cbd_distance: parseFloat(formData.get('cbd_distance')) || 5,
         is_dbss: formData.get('is_dbss') ? 1 : 0,
         mature_estate: formData.get('mature_estate') ? 1 : 0,
-        liveability_index: parseFloat(formData.get('liveability_index')) || 0.5,
+        ...amenityFlags,
         flat_type: formData.get('flat_type') || '4-ROOM',
         flat_model: formData.get('flat_model') || 'STANDARD'
     };
 }
 
-function collectTownData(formData) {
-    /**
-     * Collect town recommendation features from form
-     * Maps to: resale_price, floor_area_sqm, block_diversity, cbd_distance_band,
-     *          mrt_nearest_distance, Hawker_Nearest_Distance, Mall_Nearest_Distance,
-     *          pri_sch_nearest_distance, storey_ratio, estate_height_modernity,
-     *          amenity_cluster_500m, amenity_cluster_1km, amenity_cluster_2km
-     */
+function collectTownData(formData, predictedPrice) {
+    const amenityFlags = collectAmenityFlags(formData);
+    const cbdDist = parseFloat(formData.get('cbd_distance')) || 5;
+    const cbdBand = cbdDist <= 5 ? 1 : cbdDist <= 10 ? 2 : cbdDist <= 15 ? 3 : 4;
+    const maxFloor = parseInt(formData.get('max_floor_lvl')) || 18;
+    const midStorey = parseInt(formData.get('mid_storey')) || 9;
 
-    // Estimate cbd_distance_band from cbd_distance (1=Central, 2=City Ring, 3=Mid-ring, 4=Outer)
-    const cbd_dist = parseFloat(formData.get('cbd_distance')) || 5;
-    const cbd_band = cbd_dist <= 5 ? 1 : cbd_dist <= 10 ? 2 : cbd_dist <= 15 ? 3 : 4;
+    const mrtDist = amenityFlags.mrt_near ? 400 : 1500;
+    const hawkerDist = amenityFlags.hawker_near ? 300 : 1000;
+    const mallDist = amenityFlags.mall_near ? 500 : 1500;
+    const primarySchoolDist = amenityFlags.primary_school_near ? 400 : 1200;
+    const secondarySchoolDist = amenityFlags.secondary_school_near ? 500 : 1500;
 
-    // Estimate distances from proximity toggles and defaults
-    const mrt_dist = formData.get('mrt_near') ? 400 : 1500;
-    const hawker_dist = formData.get('hawker_near') ? 300 : 1000;
-    const mall_dist = formData.get('mall_near') ? 500 : 1500;
-    const school_dist = formData.get('school_near') ? 400 : 1200;
-
-    // Amenity clusters based on distances
-    const amenity_500m = 
-        (mrt_dist < 500 ? 1 : 0) + 
-        (mall_dist < 500 ? 1 : 0) + 
-        (hawker_dist < 500 ? 1 : 0) + 
-        (school_dist < 500 ? 1 : 0);
-
-    const amenity_1km = 
-        (mrt_dist < 1000 ? 1 : 0) + 
-        (mall_dist < 1000 ? 1 : 0) + 
-        (hawker_dist < 1000 ? 1 : 0) + 
-        (school_dist < 1000 ? 1 : 0);
-
-    const amenity_2km = 
-        (mrt_dist < 2000 ? 1 : 0) + 
-        (mall_dist < 2000 ? 1 : 0) + 
-        (hawker_dist < 2000 ? 1 : 0) + 
-        (school_dist < 2000 ? 1 : 0);
+    const amenity500m = (mrtDist < 500 ? 1 : 0) + (mallDist < 500 ? 1 : 0) + (hawkerDist < 500 ? 1 : 0) + (primarySchoolDist < 500 ? 1 : 0) + (secondarySchoolDist < 500 ? 1 : 0);
+    const amenity1km = (mrtDist < 1000 ? 1 : 0) + (mallDist < 1000 ? 1 : 0) + (hawkerDist < 1000 ? 1 : 0) + (primarySchoolDist < 1000 ? 1 : 0) + (secondarySchoolDist < 1000 ? 1 : 0);
+    const amenity2km = (mrtDist < 2000 ? 1 : 0) + (mallDist < 2000 ? 1 : 0) + (hawkerDist < 2000 ? 1 : 0) + (primarySchoolDist < 2000 ? 1 : 0) + (secondarySchoolDist < 2000 ? 1 : 0);
 
     return {
-        resale_price: 500000,  // Median price - will be overridden by prediction
+        resale_price: predictedPrice || 500000,
         floor_area_sqm: parseFloat(formData.get('floor_area_sqm')) || 100,
-        block_diversity: 1.5,  // Default - based on form inputs
-        cbd_distance_band: cbd_band,
-        mrt_nearest_distance: mrt_dist,
-        Hawker_Nearest_Distance: hawker_dist,
-        Mall_Nearest_Distance: mall_dist,
-        pri_sch_nearest_distance: school_dist,
-        storey_ratio: (parseInt(formData.get('mid_storey')) || 9) / (parseInt(formData.get('max_floor_lvl')) || 18),
-        estate_height_modernity: (parseInt(formData.get('max_floor_lvl')) || 18) / (10 + 1),
-        amenity_cluster_500m: amenity_500m,
-        amenity_cluster_1km: amenity_1km,
-        amenity_cluster_2km: amenity_2km
+        block_diversity: 1.5,
+        cbd_distance_band: cbdBand,
+        mrt_nearest_distance: mrtDist,
+        Hawker_Nearest_Distance: hawkerDist,
+        Mall_Nearest_Distance: mallDist,
+        pri_sch_nearest_distance: primarySchoolDist,
+        storey_ratio: midStorey / maxFloor,
+        estate_height_modernity: maxFloor / 11,
+        amenity_cluster_500m: amenity500m,
+        amenity_cluster_1km: amenity1km,
+        amenity_cluster_2km: amenity2km
     };
 }
 
-// ==================== API CALLS ====================
+function collectAmenityFlags(formData) {
+    return {
+        mrt_near: Boolean(formData.get('mrt_near')),
+        hawker_near: Boolean(formData.get('hawker_near')),
+        mall_near: Boolean(formData.get('mall_near')),
+        primary_school_near: Boolean(formData.get('primary_school_near')),
+        secondary_school_near: Boolean(formData.get('secondary_school_near'))
+    };
+}
+
+async function handlePricePrediction() {
+    const formData = getFormData();
+    const button = document.getElementById('pricePredictBtn');
+    const text = document.getElementById('btn-price-text');
+    const spinner = document.getElementById('btn-price-spinner');
+
+    try {
+        setLoading(button, text, spinner, true);
+        clearResults();
+
+        const result = await predictPrice(collectPriceData(formData));
+        displayPriceResult(result);
+    } catch (error) {
+        console.error('Price prediction error:', error);
+        showError(error.message || 'Price prediction failed');
+    } finally {
+        setLoading(button, text, spinner, false);
+    }
+}
+
+async function handleTownPrediction() {
+    const formData = getFormData();
+    const button = document.getElementById('townRecommendBtn');
+    const text = document.getElementById('btn-town-text');
+    const spinner = document.getElementById('btn-town-spinner');
+
+    try {
+        setLoading(button, text, spinner, true);
+        clearResults();
+
+        const priceEstimateResponse = await predictPrice(collectPriceData(formData));
+        const townResult = await predictTown(collectTownData(formData, priceEstimateResponse.predicted_price));
+        displayTownResult(townResult, priceEstimateResponse);
+    } catch (error) {
+        console.error('Town prediction error:', error);
+        showError(error.message || 'Town recommendation failed');
+    } finally {
+        setLoading(button, text, spinner, false);
+    }
+}
+
+function setLoading(button, text, spinner, isLoading) {
+    button.disabled = isLoading;
+    text.style.display = isLoading ? 'none' : 'inline';
+    spinner.classList.toggle('hidden', !isLoading);
+}
 
 async function predictPrice(data) {
     const response = await fetch('/api/predict-price', {
@@ -161,12 +164,12 @@ async function predictPrice(data) {
         body: JSON.stringify(data)
     });
 
+    const payload = await response.json();
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Price prediction failed');
+        throw new Error(payload.error || 'Price prediction failed');
     }
 
-    return await response.json();
+    return payload;
 }
 
 async function predictTown(data) {
@@ -176,67 +179,82 @@ async function predictTown(data) {
         body: JSON.stringify(data)
     });
 
+    const payload = await response.json();
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Town prediction failed');
+        throw new Error(payload.error || 'Town prediction failed');
     }
 
-    return await response.json();
+    return payload;
 }
 
-// ==================== DISPLAY RESULTS ====================
-
-function displayResults(priceResult, townResult) {
+function displayPriceResult(priceResult) {
     const resultContainer = document.getElementById('resultContainer');
-    const errorContainer = document.getElementById('errorContainer');
+    const missingFields = priceResult.missing_fields || [];
+    const range = priceResult.price_range || null;
 
-    if (!priceResult.success || !townResult.success) {
-        showError('One or more predictions failed');
-        return;
-    }
-
-    // Build result HTML
-    const resultsHTML = `
-        <div class="results-container">
-            <!-- Price Prediction -->
+    resultContainer.innerHTML = `
+        <div class="results-container single-result">
             <div class="result-card price-card">
-                <h3>💰 Estimated Price</h3>
+                <h3>💰 Price Predictor</h3>
                 <div class="price-value">${priceResult.formatted_price}</div>
-                <p class="result-subtitle">Based on flat characteristics</p>
-            </div>
-
-            <!-- Town Recommendation -->
-            <div class="result-card town-card">
-                <h3>📍 Recommended Cluster</h3>
-                <div class="cluster-name">${townResult.cluster_name}</div>
-                
-                <div class="towns-list">
-                    <h4>Best-Fit Towns:</h4>
-                    <ol>
-                        ${townResult.recommended_towns.map(town => `<li>${town}</li>`).join('')}
-                    </ol>
-                </div>
-                <p class="result-subtitle">Ranked by profile similarity</p>
+                ${range ? `<p class="result-subtitle">Estimated range: ${range.formatted_lower} – ${range.formatted_upper}</p>` : ''}
+                ${missingFields.length ? `<p class="result-subtitle">Some fields were left blank, so the model used defaults for: ${missingFields.join(', ')}</p>` : '<p class="result-subtitle">Based on the inputs you provided</p>'}
             </div>
         </div>
     `;
 
-    // Clear previous results and insert new ones
-    resultContainer.innerHTML = resultsHTML;
+    showResults();
+}
+
+function displayTownResult(townResult, priceResult) {
+    const resultContainer = document.getElementById('resultContainer');
+    const recommendations = [townResult.first_recommendation, townResult.second_recommendation].filter(Boolean);
+
+    resultContainer.innerHTML = `
+        <div class="results-container single-result">
+            <div class="result-card town-card">
+                <h3>📍 Town Recommender</h3>
+                <div class="cluster-name">${townResult.cluster_name}</div>
+                ${priceResult?.formatted_price ? `<p class="result-subtitle">Using a working price estimate of ${priceResult.formatted_price} as one of the inputs</p>` : ''}
+                <div class="towns-list">
+                    <h4>Top 2 recommendations:</h4>
+                    <ol>
+                        ${recommendations.map((town, index) => `<li><strong>#${index + 1}</strong> ${town}</li>`).join('')}
+                    </ol>
+                </div>
+                <p class="result-subtitle">Best matched town first, then the runner-up</p>
+            </div>
+        </div>
+    `;
+
+    showResults();
+}
+
+function showResults() {
+    const resultContainer = document.getElementById('resultContainer');
+    const errorContainer = document.getElementById('errorContainer');
     resultContainer.classList.remove('hidden');
     errorContainer.classList.add('hidden');
-
-    // Scroll to results
     resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function showError(message) {
     const errorContainer = document.getElementById('errorContainer');
     const errorMessage = document.getElementById('errorMessage');
-    
+
     errorMessage.textContent = message;
     errorContainer.classList.remove('hidden');
-
-    // Scroll to error
     errorContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearResults() {
+    const resultContainer = document.getElementById('resultContainer');
+    const errorContainer = document.getElementById('errorContainer');
+    if (resultContainer) {
+        resultContainer.classList.add('hidden');
+        resultContainer.innerHTML = '';
+    }
+    if (errorContainer) {
+        errorContainer.classList.add('hidden');
+    }
 }
