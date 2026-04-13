@@ -41,6 +41,9 @@ try:
 except FileNotFoundError:
     logger.error("Price model not found: lgbm_regressor.joblib")
     price_model = None
+except Exception as e:
+    logger.exception(f"Failed to load price model: {e}")
+    price_model = None
 
 try:
     with open(MODEL_DIR / "price_feature_columns.json", "r") as f:
@@ -73,12 +76,18 @@ try:
 except FileNotFoundError:
     logger.error("Town model not found: lgbm_classifier.joblib")
     town_model = None
+except Exception as e:
+    logger.exception(f"Failed to load town model: {e}")
+    town_model = None
 
 try:
     scaler_classifier = joblib.load(MODEL_DIR / "scaler_classifier.joblib")
     logger.info("✓ Classifier scaler loaded")
 except FileNotFoundError:
     logger.error("Classifier scaler not found")
+    scaler_classifier = None
+except Exception as e:
+    logger.exception(f"Failed to load classifier scaler: {e}")
     scaler_classifier = None
 
 try:
