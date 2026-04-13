@@ -11,6 +11,19 @@ import joblib
 from pathlib import Path
 import logging
 import os
+import sys
+
+# Compatibility shim for models pickled under NumPy 2.x and loaded under NumPy 1.x.
+# Some artifacts reference `numpy._core`, which does not exist in NumPy 1.x.
+try:
+    import numpy._core  # type: ignore  # noqa: F401
+except ModuleNotFoundError:
+    import numpy.core as _numpy_core
+    sys.modules.setdefault("numpy._core", _numpy_core)
+    if hasattr(_numpy_core, "multiarray"):
+        sys.modules.setdefault("numpy._core.multiarray", _numpy_core.multiarray)
+    if hasattr(_numpy_core, "umath"):
+        sys.modules.setdefault("numpy._core.umath", _numpy_core.umath)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
