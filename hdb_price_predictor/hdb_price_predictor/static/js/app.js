@@ -19,6 +19,7 @@ function setupModeCards() {
     const priceModeCard = document.getElementById('priceModeCard');
     const townModeCard = document.getElementById('townModeCard');
     const modeInput = document.getElementById('prediction_mode');
+    const runButtonText = document.getElementById('btn-run-text');
 
     const setMode = (mode) => {
         currentMode = mode;
@@ -26,6 +27,9 @@ function setupModeCards() {
         priceModeCard.classList.toggle('active', mode === 'price');
         townModeCard.classList.toggle('active', mode === 'town');
         toggleFieldSections(mode);
+        if (runButtonText) {
+            runButtonText.textContent = mode === 'price' ? 'Run Price Predictor' : 'Run Town Recommender';
+        }
     };
 
     priceModeCard.addEventListener('click', () => setMode('price'));
@@ -34,14 +38,13 @@ function setupModeCards() {
 }
 
 function setupFormHandlers() {
-    document.getElementById('pricePredictBtn').addEventListener('click', async () => {
-        switchMode('price');
-        await handlePricePrediction();
-    });
-
-    document.getElementById('townRecommendBtn').addEventListener('click', async () => {
-        switchMode('town');
-        await handleTownPrediction();
+    document.getElementById('predictionForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (currentMode === 'price') {
+            await handlePricePrediction();
+        } else {
+            await handleTownPrediction();
+        }
     });
 
     document.getElementById('predictionForm').addEventListener('reset', () => {
@@ -160,9 +163,9 @@ function collectTownPriorityFlags(formData) {
 
 async function handlePricePrediction() {
     const formData = getFormData();
-    const button = document.getElementById('pricePredictBtn');
-    const text = document.getElementById('btn-price-text');
-    const spinner = document.getElementById('btn-price-spinner');
+    const button = document.getElementById('runPredictBtn');
+    const text = document.getElementById('btn-run-text');
+    const spinner = document.getElementById('btn-run-spinner');
 
     try {
         setLoading(button, text, spinner, true);
@@ -180,9 +183,9 @@ async function handlePricePrediction() {
 
 async function handleTownPrediction() {
     const formData = getFormData();
-    const button = document.getElementById('townRecommendBtn');
-    const text = document.getElementById('btn-town-text');
-    const spinner = document.getElementById('btn-town-spinner');
+    const button = document.getElementById('runPredictBtn');
+    const text = document.getElementById('btn-run-text');
+    const spinner = document.getElementById('btn-run-spinner');
 
     try {
         setLoading(button, text, spinner, true);

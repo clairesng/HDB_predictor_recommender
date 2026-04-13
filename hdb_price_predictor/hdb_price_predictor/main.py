@@ -62,6 +62,14 @@ def load_json_from_candidates(candidates, default_value):
                 return json.load(file_handle)
     return default_value
 
+
+def get_canonical_price_medians(raw_medians):
+    canonical_medians = {}
+    for key, value in raw_medians.items():
+        canonical_key = PRICE_FEATURE_ALIASES.get(key, key)
+        canonical_medians[canonical_key] = value
+    return canonical_medians
+
 # ========== REGRESSION MODEL (Price Predictor) ==========
 try:
     price_model = joblib.load(MODEL_DIR / "lgbm_regressor.joblib")
@@ -80,7 +88,7 @@ if PRICE_FEATURES:
 else:
     logger.error("No price feature columns file found")
 
-price_medians = load_json_from_candidates(PRICE_FILE_CANDIDATES["medians"], {})
+price_medians = get_canonical_price_medians(load_json_from_candidates(PRICE_FILE_CANDIDATES["medians"], {}))
 if price_medians:
     logger.info("✓ Price feature medians loaded")
 else:
@@ -157,15 +165,30 @@ def encode_categorical_features(data_dict, label_encoders):
             try:
                 value_str = str(encoded[col]).strip()
                 normalized_value = value_str.upper().replace("-", " ")
-                class_lookup = {str(class_name).strip().upper().replace("-", " "): class_name for class_name in le.classes_}
+                if hasattr(le, "classes_"):
+                    classes = list(le.classes_)
+                elif isinstance(le, (list, tuple)):
+                    classes = list(le)
+                else:
+                    classes = list(le.values()) if isinstance(le, dict) else []
+
+                class_lookup = {str(class_name).strip().upper().replace("-", " "): index for index, class_name in enumerate(classes)}
                 if normalized_value in class_lookup:
-                    encoded[col] = int(le.transform([class_lookup[normalized_value]])[0])
+                    encoded[col] = int(class_lookup[normalized_value])
                 else:
                     logger.warning(f"Value '{value_str}' not in {col}. Using median.")
-                    encoded[col] = int(np.median(range(len(le.classes_))))
+                    encoded[col] = int(np.median(range(len(classes)))) if classes else 0
             except Exception as e:
                 logger.error(f"Error encoding {col}: {e}")
-                encoded[col] = int(np.median(range(len(le.classes_))))
+                if hasattr(le, "classes_"):
+                    classes = list(le.classes_)
+                elif isinstance(le, (list, tuple)):
+                    classes = list(le)
+                elif isinstance(le, dict):
+                    classes = list(le.values())
+                else:
+                    classes = []
+                encoded[col] = int(np.median(range(len(classes)))) if classes else 0
     
     return encoded
 
@@ -184,6 +207,10 @@ def prepare_price_input(user_input, label_encoders, feature_medians, all_feature
     for alias, canonical in PRICE_FEATURE_ALIASES.items():
         if alias in feature_vector and canonical not in feature_vector:
             feature_vector[canonical] = feature_vector[alias]
+
+    # Intelligent fallback for transaction year when omitted by the user.
+    if feature_vector.get("tranc_year", 0) in (0, None):
+        feature_vector["tranc_year"] = feature_medians.get("tranc_year", 2020)
     
     # Encode categorical features
     feature_vector = encode_categorical_features(feature_vector, label_encoders)
