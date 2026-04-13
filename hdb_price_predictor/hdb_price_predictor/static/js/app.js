@@ -217,38 +217,55 @@ async function predictTown(data) {
 }
 
 async function callApi(path, data, fallbackMessage) {
-    let response;
-    try {
-        const url = new URL(path, window.location.origin).toString();
-        response = await fetch(url, {
+    const url = new URL(path, window.location.origin).toString();
+
+    const attemptRequest = async () => {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
+
+        const contentType = response.headers.get('content-type') || '';
+        let payload;
+        try {
+            payload = contentType.includes('application/json') ? await response.json() : await response.text();
+        } catch {
+            payload = null;
+        }
+
+        return { response, payload };
+    };
+
+    let result;
+    try {
+        result = await attemptRequest();
     } catch (error) {
         throw new Error(normalizeClientError(error, fallbackMessage));
     }
 
-    const contentType = response.headers.get('content-type') || '';
-    let payload;
-    try {
-        payload = contentType.includes('application/json') ? await response.json() : await response.text();
-    } catch {
-        payload = null;
+    // Handle transient gateway errors (common on cold starts) with one retry.
+    if (result.response.status === 502 || result.response.status === 503 || result.response.status === 504) {
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        try {
+            result = await attemptRequest();
+        } catch (error) {
+            throw new Error(normalizeClientError(error, fallbackMessage));
+        }
     }
 
-    if (!response.ok) {
-        if (payload && typeof payload === 'object' && payload.error) {
-            throw new Error(payload.error);
+    if (!result.response.ok) {
+        if (result.payload && typeof result.payload === 'object' && result.payload.error) {
+            throw new Error(result.payload.error);
         }
-        if (typeof payload === 'string' && payload.trim()) {
-            throw new Error(payload.trim());
+        if (typeof result.payload === 'string' && result.payload.trim()) {
+            throw new Error(result.payload.trim());
         }
-        throw new Error(`${fallbackMessage} (HTTP ${response.status})`);
+        throw new Error(`${fallbackMessage} (HTTP ${result.response.status})`);
     }
 
-    if (payload && typeof payload === 'object') {
-        return payload;
+    if (result.payload && typeof result.payload === 'object') {
+        return result.payload;
     }
 
     throw new Error(`${fallbackMessage} (Invalid server response)`);
