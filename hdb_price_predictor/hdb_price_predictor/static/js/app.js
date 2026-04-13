@@ -191,9 +191,23 @@ async function handleTownPrediction() {
         setLoading(button, text, spinner, true);
         clearResults();
 
-        const priceEstimateResponse = await predictPrice(collectPriceData(formData));
-        const townResult = await predictTown(collectTownData(formData, priceEstimateResponse.predicted_price));
-        displayTownResult(townResult, priceEstimateResponse);
+        const rawBudgetHint = parseFloat(formData.get('town_budget_hint'));
+        const hasBudgetHint = Number.isFinite(rawBudgetHint) && rawBudgetHint > 0;
+
+        let priceEstimateResponse = null;
+        let effectivePriceForTown = hasBudgetHint ? rawBudgetHint : null;
+
+        if (!hasBudgetHint) {
+            priceEstimateResponse = await predictPrice(collectPriceData(formData));
+            effectivePriceForTown = priceEstimateResponse.predicted_price;
+        }
+
+        const townResult = await predictTown(collectTownData(formData, effectivePriceForTown));
+        displayTownResult(townResult, {
+            usedBudgetHint: hasBudgetHint,
+            budgetHint: hasBudgetHint ? rawBudgetHint : null,
+            priceEstimate: priceEstimateResponse
+        });
     } catch (error) {
         console.error('Town prediction error:', error);
         showError(error.message || 'Town recommendation failed');
@@ -302,16 +316,24 @@ function displayPriceResult(priceResult) {
     showResults();
 }
 
-function displayTownResult(townResult, priceResult) {
+function displayTownResult(townResult, context = {}) {
     const resultContainer = document.getElementById('resultContainer');
     const recommendations = [townResult.first_recommendation, townResult.second_recommendation].filter(Boolean);
+    const topRecommendation = recommendations[0] || 'No match found';
+    const secondRecommendation = recommendations[1] || null;
+    const subtitle = context.usedBudgetHint
+        ? `Using your budget input of ${formatCurrency(context.budgetHint)} as one of the inputs`
+        : (context.priceEstimate?.formatted_price
+            ? `Using a working price estimate of ${context.priceEstimate.formatted_price} as one of the inputs`
+            : 'Using your selected preferences as the model inputs');
 
     resultContainer.innerHTML = `
         <div class="results-container single-result">
             <div class="result-card town-card">
                 <h3>📍 Town Recommender</h3>
-                <div class="cluster-name">${townResult.cluster_name}</div>
-                ${priceResult?.formatted_price ? `<p class="result-subtitle">Using a working price estimate of ${priceResult.formatted_price} as one of the inputs</p>` : ''}
+                <div class="cluster-name">${topRecommendation}</div>
+                ${secondRecommendation ? `<p class="result-subtitle" style="font-size: 0.95em; margin-top: -8px;">2nd recommendation: ${secondRecommendation}</p>` : ''}
+                <p class="result-subtitle">${subtitle}</p>
                 <div class="towns-list">
                     <h4>Top 2 recommendations:</h4>
                     <ol>
@@ -324,6 +346,12 @@ function displayTownResult(townResult, priceResult) {
     `;
 
     showResults();
+}
+
+function formatCurrency(value) {
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return '$0';
+    return `$${Math.round(amount).toLocaleString()}`;
 }
 
 function showResults() {
