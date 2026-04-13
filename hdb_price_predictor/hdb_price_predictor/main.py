@@ -12,6 +12,7 @@ from pathlib import Path
 import logging
 import os
 import sys
+import platform
 
 # Compatibility shim for models pickled under NumPy 2.x and loaded under NumPy 1.x.
 # Some artifacts reference `numpy._core`, which does not exist in NumPy 1.x.
@@ -28,6 +29,26 @@ except ModuleNotFoundError:
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+try:
+    import lightgbm as lgb
+    LIGHTGBM_VERSION = getattr(lgb, "__version__", "unknown")
+except Exception:
+    LIGHTGBM_VERSION = "unavailable"
+
+try:
+    import sklearn
+    SKLEARN_VERSION = getattr(sklearn, "__version__", "unknown")
+except Exception:
+    SKLEARN_VERSION = "unavailable"
+
+logger.info(
+    "Runtime versions | python=%s | numpy=%s | sklearn=%s | lightgbm=%s",
+    platform.python_version(),
+    np.__version__,
+    SKLEARN_VERSION,
+    LIGHTGBM_VERSION,
+)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
@@ -388,8 +409,21 @@ def predict_price():
         })
     
     except Exception as e:
-        logger.error(f"Price prediction error: {e}")
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+        error_text = str(e)
+        logger.error(f"Price prediction error: {error_text}")
+        if "Booster" in error_text and "handle" in error_text:
+            return jsonify({
+                'error': (
+                    'Model/runtime incompatibility detected. '
+                    'The deployed LightGBM version does not match the model artifact version.'
+                ),
+                'diagnostic': {
+                    'lightgbm_version': LIGHTGBM_VERSION,
+                    'sklearn_version': SKLEARN_VERSION,
+                    'numpy_version': np.__version__,
+                },
+            }), 500
+        return jsonify({'error': f'Prediction failed: {error_text}'}), 500
 
 
 @app.route('/api/predict-town', methods=['POST'])
@@ -438,8 +472,21 @@ def predict_town():
         })
     
     except Exception as e:
-        logger.error(f"Town prediction error: {e}")
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+        error_text = str(e)
+        logger.error(f"Town prediction error: {error_text}")
+        if "Booster" in error_text and "handle" in error_text:
+            return jsonify({
+                'error': (
+                    'Model/runtime incompatibility detected. '
+                    'The deployed LightGBM version does not match the model artifact version.'
+                ),
+                'diagnostic': {
+                    'lightgbm_version': LIGHTGBM_VERSION,
+                    'sklearn_version': SKLEARN_VERSION,
+                    'numpy_version': np.__version__,
+                },
+            }), 500
+        return jsonify({'error': f'Prediction failed: {error_text}'}), 500
 
 
 @app.errorhandler(404)
