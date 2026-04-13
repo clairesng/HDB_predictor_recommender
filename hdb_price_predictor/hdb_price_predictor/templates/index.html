@@ -157,13 +157,10 @@
             font-size: 0.95em;
         }
 
-        .optional-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 999px;
-            background: #eff6ff;
+        .range-value {
+            font-size: 0.9em;
             color: var(--primary);
-            font-size: 0.78em;
+            margin-top: 6px;
             font-weight: 600;
         }
 
@@ -464,21 +461,17 @@
         <!-- ==================== HEADER ==================== -->
         <div class="header">
             <h1>🏠 HDB Resale Price Predictor and Town Recommender</h1>
-            <p>Choose a price estimate or a town recommendation — each tool works on its own</p>
+            <p>Get a price estimate or town recommendation for Singapore's HDB resale market.</p>
             <div class="feature-badges">
-                <span class="badge">💰 Price Prediction</span>
-                <span class="badge">📍 Town Recommendation</span>
                 <span class="badge">🎯 Powered by ML</span>
             </div>
 
             <div class="mode-switch" role="tablist" aria-label="Prediction mode">
                 <button type="button" class="mode-card active" data-mode="price" id="priceModeCard">
                     <h3>Price Predictor</h3>
-                    <p>Get an estimated resale price and a range when some details are missing.</p>
                 </button>
                 <button type="button" class="mode-card" data-mode="town" id="townModeCard">
                     <h3>Town Recommender</h3>
-                    <p>See the best-fit town plus a second recommendation based on your priorities.</p>
                 </button>
             </div>
         </div>
@@ -494,16 +487,16 @@
             <form id="predictionForm">
                 <input type="hidden" id="prediction_mode" name="prediction_mode" value="price">
 
-                <p class="section-note">Leave any field blank if you do not know it — the app will fill sensible defaults and show a range where appropriate.</p>
+                <p class="section-note">Leave blank or write a guess if you're unsure — the app will input sensible defaults and show a range where appropriate. More precise inputs will produce a more accurate output.</p>
 
                 <div id="priceFieldSections">
                 <!-- ========== FLAT CHARACTERISTICS ========== -->
                 <div class="form-section">
-                    <div class="section-title">🏘️ Flat Characteristics <span class="optional-badge">Mostly optional</span></div>
+                    <div class="section-title">🏘️ Flat Characteristics</div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="flat_type">Flat Type <span class="unit">(optional)</span></label>
-                            <select id="flat_type" name="flat_type">
+                            <label for="flat_type">Flat Type <span class="unit">(required)</span></label>
+                            <select id="flat_type" name="flat_type" required>
                                 <option value="">-- Select Flat Type --</option>
                                 <option value="1-ROOM">1-ROOM</option>
                                 <option value="2-ROOM">2-ROOM</option>
@@ -515,7 +508,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="flat_model">Flat Model <span class="unit">(optional)</span></label>
+                            <label for="flat_model">Flat Model <span class="unit">(required)</span></label>
                             <select id="flat_model" name="flat_model">
                                 <option value="">-- Select Flat Model --</option>
                                 <option value="STANDARD" selected>STANDARD</option>
@@ -528,16 +521,16 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="floor_area_sqm">Floor Area <span class="unit">(sqm, optional)</span></label>
+                            <label for="floor_area_sqm">Floor Area <span class="unit">(sqm, required)</span></label>
                             <input type="number" id="floor_area_sqm" name="floor_area_sqm" 
-                                   placeholder="e.g., 90" min="30" max="200" value="90">
+                                placeholder="e.g., 90" min="30" max="200" value="90" required>
                             <span class="info-text">Typical range: 30-200 sqm</span>
                         </div>
 
                         <div class="form-group">
-                            <label for="remaining_lease">Remaining Lease <span class="unit">(years, optional)</span></label>
+                            <label for="remaining_lease">Remaining Lease <span class="unit">(years, required)</span></label>
                             <input type="number" id="remaining_lease" name="remaining_lease" 
-                                   placeholder="e.g., 75" min="30" max="99" value="75">
+                                placeholder="e.g., 75" min="30" max="99" value="75" required>
                             <span class="info-text">Total lease remaining</span>
                         </div>
                     </div>
@@ -545,20 +538,13 @@
 
                 <!-- ========== BUILDING FEATURES ========== -->
                 <div class="form-section">
-                    <div class="section-title">🏢 Building Features <span class="optional-badge">Optional</span></div>
+                    <div class="section-title">🏢 Building Features</div>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="max_floor_lvl">Maximum Floor Level <span class="unit">(floors, optional)</span></label>
-                            <input type="number" id="max_floor_lvl" name="max_floor_lvl" 
-                                   placeholder="e.g., 18" min="3" max="50" value="18">
-                            <span class="info-text">Tallest floor in building</span>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="mid_storey">Mid Storey Level <span class="unit">(floors, optional)</span></label>
-                            <input type="number" id="mid_storey" name="mid_storey" 
-                                   placeholder="e.g., 9" min="1" max="50" value="9">
-                            <span class="info-text">Middle floor level</span>
+                            <label for="max_floor_lvl">Maximum Floor Level <span class="unit">(floors)</span></label>
+                            <input type="range" id="max_floor_lvl" name="max_floor_lvl" min="3" max="50" value="18" step="1">
+                            <span class="range-value">Selected: <span id="max_floor_lvl_value">18</span> floors</span>
+                            <span class="info-text">Choose within dataset range: 3 to 50 floors</span>
                         </div>
 
                     </div>
@@ -566,7 +552,7 @@
 
                 <!-- ========== SPECIAL FEATURES ========== -->
                 <div class="form-section">
-                    <div class="section-title">✨ Special Features <span class="optional-badge">Optional</span></div>
+                    <div class="section-title">✨ Special Features</div>
                     <div class="checkbox-group">
                         <div class="checkbox-wrapper">
                             <input type="checkbox" id="is_dbss" name="is_dbss">
@@ -581,14 +567,13 @@
 
                 <!-- ========== LIVEABILITY FACTORS ========== -->
                 <div class="form-section">
-                    <div class="section-title">📍 Liveability Factors <span class="optional-badge">Used to compute the score</span></div>
-                    <p class="section-note">Tick the amenities that are nearby. The backend will turn these into the liveability score used by the price predictor.</p>
+                    <div class="section-title">📍 Liveability Factors</div>
+                    <p class="section-note">Select nearby amenities</p>
                     <div class="form-grid">
                         <div class="form-group">
-                            <label for="cbd_distance">Distance to CBD <span class="unit">(km, optional)</span></label>
+                            <label for="cbd_distance">Distance to CBD <span class="unit">(km)</span></label>
                             <input type="number" id="cbd_distance" name="cbd_distance" 
                                    placeholder="e.g., 5" min="0" max="40" step="0.5" value="5">
-                            <span class="info-text">Distance to Central Business District</span>
                         </div>
                     </div>
 
@@ -661,11 +646,11 @@
                 <!-- ========== BUTTONS ========== -->
                 <div class="button-group">
                     <button type="button" class="btn btn-predict" id="pricePredictBtn">
-                        <span id="btn-price-text">💰 Get Price Estimate</span>
+                        <span id="btn-price-text">Price Predictor</span>
                         <span id="btn-price-spinner" class="spinner hidden"></span>
                     </button>
                     <button type="button" class="btn btn-predict" id="townRecommendBtn">
-                        <span id="btn-town-text">📍 Get Town Recommendations</span>
+                        <span id="btn-town-text">Town Recommender</span>
                         <span id="btn-town-spinner" class="spinner hidden"></span>
                     </button>
                     <button type="reset" class="btn btn-reset" onclick="clearResults()">↻ Reset Form</button>

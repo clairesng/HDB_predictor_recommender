@@ -47,6 +47,14 @@ function setupFormHandlers() {
     document.getElementById('predictionForm').addEventListener('reset', () => {
         setTimeout(clearResults, 0);
     });
+
+    const maxFloorInput = document.getElementById('max_floor_lvl');
+    const maxFloorValue = document.getElementById('max_floor_lvl_value');
+    if (maxFloorInput && maxFloorValue) {
+        maxFloorInput.addEventListener('input', () => {
+            maxFloorValue.textContent = maxFloorInput.value;
+        });
+    }
 }
 
 function switchMode(mode) {
@@ -76,11 +84,13 @@ function getFormData() {
 
 function collectPriceData(formData) {
     const amenityFlags = collectAmenityFlags(formData);
+    const maxFloor = parseInt(formData.get('max_floor_lvl')) || 18;
+    const derivedMidStorey = Math.max(1, Math.round(maxFloor / 2));
 
     return {
         floor_area_sqm: parseFloat(formData.get('floor_area_sqm')) || 100,
-        max_floor_lvl: parseInt(formData.get('max_floor_lvl')) || 18,
-        mid_storey: parseInt(formData.get('mid_storey')) || 9,
+        max_floor_lvl: maxFloor,
+        mid_storey: derivedMidStorey,
         remaining_lease: parseFloat(formData.get('remaining_lease')) || 75,
         cbd_distance: parseFloat(formData.get('cbd_distance')) || 5,
         is_dbss: formData.get('is_dbss') ? 1 : 0,
@@ -96,7 +106,7 @@ function collectTownData(formData, predictedPrice) {
     const cbdDist = parseFloat(formData.get('cbd_distance')) || 5;
     const cbdBand = cbdDist <= 5 ? 1 : cbdDist <= 10 ? 2 : cbdDist <= 15 ? 3 : 4;
     const maxFloor = parseInt(formData.get('max_floor_lvl')) || 18;
-    const midStorey = parseInt(formData.get('mid_storey')) || 9;
+    const midStorey = Math.max(1, Math.round(maxFloor / 2));
     const budgetHint = parseFloat(formData.get('town_budget_hint')) || 0;
 
     const mrtDist = amenityFlags.mrt_near ? 400 : 1500;
