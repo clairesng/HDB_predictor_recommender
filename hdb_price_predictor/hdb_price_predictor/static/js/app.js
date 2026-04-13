@@ -301,6 +301,7 @@ function displayPriceResult(priceResult) {
     const resultContainer = document.getElementById('resultContainer');
     const missingFields = priceResult.missing_fields || [];
     const range = priceResult.price_range || null;
+    const fallbackNote = buildPriceFallbackNote(missingFields);
 
     resultContainer.innerHTML = `
         <div class="results-container single-result">
@@ -308,12 +309,24 @@ function displayPriceResult(priceResult) {
                 <h3>💰 Price Predictor</h3>
                 <div class="price-value">${priceResult.formatted_price}</div>
                 ${range ? `<p class="result-subtitle">Estimated range: ${range.formatted_lower} – ${range.formatted_upper}</p>` : ''}
-                ${missingFields.length ? `<p class="result-subtitle">Some fields were left blank, so the model used defaults for: ${missingFields.join(', ')}</p>` : '<p class="result-subtitle">Based on the inputs you provided</p>'}
+                <p class="result-subtitle">${fallbackNote}</p>
             </div>
         </div>
     `;
 
     showResults();
+}
+
+function buildPriceFallbackNote(missingFields) {
+    if (!missingFields.length) {
+        return 'Based on the inputs you provided.';
+    }
+
+    if (missingFields.length === 1 && missingFields[0] === 'tranc_year') {
+        return 'Estimated using your inputs with a standard recent-market reference year.';
+    }
+
+    return `Estimated using your inputs and standard defaults for a few missing details (${missingFields.join(', ')}).`;
 }
 
 function displayTownResult(townResult, context = {}) {
