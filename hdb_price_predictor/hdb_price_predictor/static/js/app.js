@@ -244,14 +244,14 @@ async function callApi(path, data, fallbackMessage) {
         if (typeof payload === 'string' && payload.trim()) {
             throw new Error(payload.trim());
         }
-        throw new Error(fallbackMessage);
+        throw new Error(`${fallbackMessage} (HTTP ${response.status})`);
     }
 
     if (payload && typeof payload === 'object') {
         return payload;
     }
 
-    throw new Error(fallbackMessage);
+    throw new Error(`${fallbackMessage} (Invalid server response)`);
 }
 
 function normalizeClientError(error, fallbackMessage) {
