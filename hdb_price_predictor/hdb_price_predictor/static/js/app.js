@@ -209,33 +209,61 @@ function setLoading(button, text, spinner, isLoading) {
 }
 
 async function predictPrice(data) {
-    const response = await fetch('/api/predict-price', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload.error || 'Price prediction failed');
-    }
-
-    return payload;
+    return await callApi('/api/predict-price', data, 'Price prediction failed');
 }
 
 async function predictTown(data) {
-    const response = await fetch('/api/predict-town', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    });
+    return await callApi('/api/predict-town', data, 'Town prediction failed');
+}
 
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload.error || 'Town prediction failed');
+async function callApi(path, data, fallbackMessage) {
+    let response;
+    try {
+        const url = new URL(path, window.location.origin).toString();
+        response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+    } catch (error) {
+        throw new Error(normalizeClientError(error, fallbackMessage));
     }
 
-    return payload;
+    const contentType = response.headers.get('content-type') || '';
+    let payload;
+    try {
+        payload = contentType.includes('application/json') ? await response.json() : await response.text();
+    } catch {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        if (payload && typeof payload === 'object' && payload.error) {
+            throw new Error(payload.error);
+        }
+        if (typeof payload === 'string' && payload.trim()) {
+            throw new Error(payload.trim());
+        }
+        throw new Error(fallbackMessage);
+    }
+
+    if (payload && typeof payload === 'object') {
+        return payload;
+    }
+
+    throw new Error(fallbackMessage);
+}
+
+function normalizeClientError(error, fallbackMessage) {
+    const rawMessage = error?.message || '';
+    const normalized = rawMessage.toLowerCase();
+    if (normalized.includes('did not match the expected pattern')) {
+        return 'Please enter valid numeric values only (no commas, symbols, or text).';
+    }
+    if (normalized.includes('failed to fetch') || normalized.includes('networkerror')) {
+        return 'Unable to reach the server. Please refresh and try again.';
+    }
+    return rawMessage || fallbackMessage;
 }
 
 function displayPriceResult(priceResult) {
